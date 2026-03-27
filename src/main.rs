@@ -1,12 +1,37 @@
 use std::ffi::c_void;
+use std::env;
+use std::process;
 use sysinfo::System;
 use windows::{
     Win32::{Foundation::{CloseHandle, HANDLE}, System::{Diagnostics::Debug::WriteProcessMemory, LibraryLoader::{GetModuleHandleA, GetProcAddress}, Memory::{MEM_COMMIT, MEM_RESERVE, PAGE_READWRITE, VirtualAllocEx}, Threading::{CreateRemoteThread, GetExitCodeThread, OpenProcess, PROCESS_ALL_ACCESS}}}, core::s
 };
 
+struct Config {
+    target_process: String,
+    dll_path: String,
+}
+
+impl Config {
+    fn build(args: &[String]) -> Result<Config, &'static str> {
+        if args.len() < 3 {
+            return Err("not enough args");
+        }
+        let target_process = args[1].clone();
+        let mut dll_path = args[2].clone();
+        dll_path.push_str("\0");
+
+        Ok(Config { target_process, dll_path })
+        
+    }
+}
+
 fn main() {
-    let target_process = "Target.exe";
-    let dll_path = "Path\\To\\.dll\0";
+    let args: Vec<String> = env::args().collect();
+
+    let config = Config::build(&args).unwrap_or_else(|e| {
+        println!("Problem passing args: {e}");
+        process::exit(1);
+    });
 
     let mut system = System::new_all();
     system.refresh_all();
@@ -14,11 +39,11 @@ fn main() {
     let pid = system
         .processes()
         .values()
-        .find(|p| p.name().to_lowercase() == target_process.to_lowercase())
+        .find(|p| p.name().to_lowercase() == config.target_process.to_lowercase())
         .map(|p| p.pid().as_u32())
         .expect("Could not find target process");
 
-    println!("[+] found {} with PID: {}", target_process, pid);
+    println!("[+] found {} with PID: {}", config.target_process, pid);
 
     unsafe {
         let process_handle: HANDLE = OpenProcess(PROCESS_ALL_ACCESS, false, pid)
@@ -27,7 +52,7 @@ fn main() {
         let remote_mem = VirtualAllocEx(
             process_handle,
             None,
-            dll_path.len(),
+            config.dll_path.len(),
             MEM_COMMIT | MEM_RESERVE,
             PAGE_READWRITE,
 
@@ -40,8 +65,8 @@ fn main() {
         WriteProcessMemory(
             process_handle,
             remote_mem,
-            dll_path.as_ptr() as *const c_void,
-            dll_path.len(),
+            config.dll_path.as_ptr() as *const c_void,
+            config.dll_path.len(),
             None,
             ).expect("Failed to write process memory");
 
