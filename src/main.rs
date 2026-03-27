@@ -16,13 +16,13 @@ fn main() {
         .values()
         .find(|p| p.name().to_lowercase() == target_process.to_lowercase())
         .map(|p| p.pid().as_u32())
-        .expect("Could not find target_process");
+        .expect("Could not find target process");
 
     println!("[+] found {} with PID: {}", target_process, pid);
 
     unsafe {
         let process_handle: HANDLE = OpenProcess(PROCESS_ALL_ACCESS, false, pid)
-            .expect("failed to open");   
+            .expect("Failed to open");   
 
         let remote_mem = VirtualAllocEx(
             process_handle,
@@ -34,7 +34,7 @@ fn main() {
         );
 
         if remote_mem.is_null() {
-            panic!("failed to alloc memory");
+            panic!("Failed to alloc memory");
         }
 
         WriteProcessMemory(
@@ -43,7 +43,7 @@ fn main() {
             dll_path.as_ptr() as *const c_void,
             dll_path.len(),
             None,
-            ).expect("failed to write process memory");
+            ).expect("Failed to write process memory");
 
         let kernel32 = GetModuleHandleA(s!("kernel32.dll")).unwrap();
         let load_library_addr = GetProcAddress(kernel32, s!("LoadLibraryA")).expect("failed to load LoadLibraryA");
@@ -58,7 +58,7 @@ fn main() {
             Some(remote_mem),
             0,
             None,
-            ).expect("failed to create remote thread");
+            ).expect("Failed to create remote thread");
 
         println!("[+] Injection successful");
 
